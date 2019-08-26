@@ -1,0 +1,51 @@
+ 
+@startuml
+
+    skinparam backgroundColor #EEEBDC
+    participant "com_android_server_power_PowerManagerService.cpp" as jni_pms
+    participant "com_android_server_am_BatteryStatsService.cpp" order 30
+    participant "autosuspend.c" as Ass
+    participant "autosuspend_wakeup_count.c" as Aswc
+
+    activate Ass
+    [->jni_pms:nativeSetAutoSuspend
+    alt if(enable)如果走enable 流程
+    jni_pms -> Ass :  autosuspend_enable
+
+    alt if(!autosuspend_inited)
+    Ass -> Ass:autosuspend_init
+    note right
+    初始化 autosuspend_inited
+    end note
+
+    activate Ass
+    Ass -> Aswc:autosuspend_wakeup_count_init
+    note right
+    初始化信号量
+    初始化suspend_thread线程
+    返回&autosuspend_wakeup_count_ops 函数指针
+    end note 
+    activate Aswc
+    create control suspend_thread
+    Aswc -> suspend_thread:pthread_create\n创建suspend_thread
+    Ass <- Aswc:
+    deactivate Aswc
+    deactivate Ass
+    end
+
+    Ass -> Aswc : autosuspend_ops->enable()
+    note right
+    enable() 即是 autosuspend_wakeup_count_enable
+    end note
+    Aswc ->]:sem_post(&suspend_lockout);
+    note left #ffbbbb
+    suspend_thread 和  autosuspend_wakeup_count_disable
+    在等待该信号 suspend_thread可以继续干活
+    end note 
+    Ass <-- Aswc:
+    jni_pms <-- Ass:
+    [<--jni_pms:
+    deactivate Ass
+
+
+    @enduml
